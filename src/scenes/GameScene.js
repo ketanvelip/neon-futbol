@@ -44,9 +44,12 @@ export default class GameScene extends Phaser.Scene {
       p.homeY = pos.y;
       return p;
     });
-    this.aiPlayers = GAME_CONFIG.playerPositions.ai.map(pos =>
-      new Player(this, pos.x, pos.y, this.aiTeam, true)
-    );
+    this.aiPlayers = GAME_CONFIG.playerPositions.ai.map(pos => {
+      const p = new Player(this, pos.x, pos.y, this.aiTeam, true);
+      p.homeX = pos.x;
+      p.homeY = pos.y;
+      return p;
+    });
 
     this.controlledPlayer = this.humanPlayers[0];
 

@@ -1,15 +1,19 @@
 import Phaser from 'phaser';
 import { GAME_CONFIG } from '../config.js';
 
+const PITCH = GAME_CONFIG.pitch;
+const PITCH_TOP    = PITCH.y + 40;
+const PITCH_BOTTOM = PITCH.y + PITCH.height - 40;
+
 export class AIController {
   constructor(scene, players, ball, attackGoalX, defendGoalX) {
     this.scene = scene;
     this.players = players;
     this.ball = ball;
-    this.attackGoalX = attackGoalX; // x of the goal to attack (human's left goal)
-    this.goalY = GAME_CONFIG.pitch.y + GAME_CONFIG.pitch.height / 2;
-    this.defendGoalX = defendGoalX; // x of goal to protect (AI's right goal)
-    this.humanPlayers = null; // set by GameScene for phantom awareness
+    this.attackGoalX = attackGoalX;
+    this.goalY = PITCH.y + PITCH.height / 2;
+    this.defendGoalX = defendGoalX;
+    this.humanPlayers = null;
     this.kickCooldown = 0;
   }
 
@@ -18,26 +22,55 @@ export class AIController {
 
     const phantom = this._isPhantomActive();
 
-    // Find nearest AI player to ball
-    let chaser = this.players[0];
-    let chaserDist = Infinity;
-    this.players.forEach(p => {
+    // Goalkeeper stays near goal — never selected as chaser
+    const gk      = this.players.find(p => p.homeX > this.defendGoalX - 200);
+    const outfield = this.players.filter(p => p !== gk);
+
+    // GK tracks ball Y along goal line
+    if (gk) this._updateGK(gk);
+
+    // Nearest outfield player chases the ball
+    let chaser = outfield[0], chaserDist = Infinity;
+    outfield.forEach(p => {
       const d = Phaser.Math.Distance.Between(p.x, p.y, this.ball.x, this.ball.y);
       if (d < chaserDist) { chaserDist = d; chaser = p; }
     });
 
-    this.players.forEach(p => {
+    outfield.forEach(p => {
       if (p === chaser) {
-        // Phantom: chaser moves at half speed — loses confidence without a visible player
-        if (phantom) p.setVelocity(p.body.velocity.x * 0.5, p.body.velocity.y * 0.5);
-        else p.moveToward(this.ball.x, this.ball.y);
+        if (phantom) {
+          p.setVelocity(p.body.velocity.x * 0.5, p.body.velocity.y * 0.5);
+        } else {
+          p.moveToward(this.ball.x, this.ball.y);
+        }
         this._tryKick(p, chaserDist);
       } else {
-        const defX = (this.ball.x + this.defendGoalX) / 2;
-        const defY = (this.ball.y + this.goalY) / 2;
-        p.moveToward(defX, defY);
+        this._updateDefender(p);
       }
     });
+  }
+
+  _updateGK(gk) {
+    const ty = Phaser.Math.Clamp(this.ball.y, this.goalY - PITCH.goalHeight / 2, this.goalY + PITCH.goalHeight / 2);
+    const dy = ty - gk.y;
+    if (Math.abs(dy) > 4) {
+      gk.setVelocity(0, Math.sign(dy) * GAME_CONFIG.ai.speed * 0.75);
+    } else {
+      gk.setVelocity(0, 0);
+    }
+  }
+
+  _updateDefender(p) {
+    // Each defender holds a position between ball and own goal,
+    // offset to their natural side so they don't stack on each other
+    const defX = Phaser.Math.Clamp(
+      (this.ball.x + this.defendGoalX) / 2,
+      Math.min(this.attackGoalX, this.defendGoalX) + 60,
+      Math.max(this.attackGoalX, this.defendGoalX) - 60
+    );
+    const sideOffset = p.homeY < this.goalY ? -75 : 75;
+    const defY = Phaser.Math.Clamp(this.ball.y + sideOffset, PITCH_TOP, PITCH_BOTTOM);
+    p.moveToward(defX, defY);
   }
 
   _isPhantomActive() {
@@ -53,7 +86,7 @@ export class AIController {
     const len = Math.sqrt(dx * dx + dy * dy);
     if (len === 0) return;
 
-    const distToGoal = Phaser.Math.Distance.Between(player.x, player.y, this.attackGoalX, this.attackGoalY);
+    const distToGoal = Phaser.Math.Distance.Between(player.x, player.y, this.attackGoalX, this.goalY);
     const inShootRange = distToGoal < GAME_CONFIG.ai.shootRange;
     const usePower = inShootRange && Math.random() < GAME_CONFIG.ai.powerShotChance;
 
@@ -62,6 +95,6 @@ export class AIController {
       : GAME_CONFIG.ball.kickSpeed * 0.85;
 
     this.ball.kick(dx / len, dy / len, speed);
-    this.kickCooldown = 350; // prevent rapid re-kicking
+    this.kickCooldown = 350;
   }
 }
