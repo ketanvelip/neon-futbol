@@ -23,6 +23,7 @@ export default class GameScene extends Phaser.Scene {
     this.charging = false;
     this.chargeStart = 0;
     this.chargePercent = 0;
+    this.teammateKickCooldown = 0;
 
     const p = GAME_CONFIG.pitch;
     this.pLeft   = p.x;
@@ -161,6 +162,7 @@ export default class GameScene extends Phaser.Scene {
     this._handleKick(time);
     this._handleAbility();
 
+    this.teammateKickCooldown = Math.max(0, this.teammateKickCooldown - delta);
     this.humanPlayers.forEach(p => p.tickCooldown(delta));
     this.aiController.update(delta);
 
@@ -206,19 +208,8 @@ export default class GameScene extends Phaser.Scene {
       player.setVelocity(0, 0);
     }
 
-    // Non-controlled players drift back to their home positions
-    this.humanPlayers.forEach(p => {
-      if (p === player) return;
-      const dx = p.homeX - p.x;
-      const dy = p.homeY - p.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist > 6) {
-        const spd = GAME_CONFIG.player.speed * 0.55;
-        p.setVelocity(dx / dist * spd, dy / dist * spd);
-      } else {
-        p.setVelocity(0, 0);
-      }
-    });
+    // Smart teammate AI
+    this._updateTeammates(player);
 
     // Clamp all human players to pitch
     const r = GAME_CONFIG.player.radius;
@@ -230,6 +221,62 @@ export default class GameScene extends Phaser.Scene {
       p.x = Phaser.Math.Clamp(p.x, this.pLeft + r, this.pRight - r);
       p.y = Phaser.Math.Clamp(p.y, this.pTop  + r, this.pBottom - r);
     });
+  }
+
+  _updateTeammates(controlledPlayer) {
+    const teammates = this.humanPlayers.filter(p => p !== controlledPlayer);
+    if (teammates.length === 0) return;
+
+    const kickRange = GAME_CONFIG.player.radius + GAME_CONFIG.ball.radius + GAME_CONFIG.player.kickRange;
+
+    // Sort teammates by distance to ball so we can assign roles
+    teammates.sort((a, b) =>
+      Phaser.Math.Distance.Between(a.x, a.y, this.ball.x, this.ball.y) -
+      Phaser.Math.Distance.Between(b.x, b.y, this.ball.x, this.ball.y)
+    );
+
+    teammates.forEach((p, idx) => {
+      const distToBall = Phaser.Math.Distance.Between(p.x, p.y, this.ball.x, this.ball.y);
+
+      // Auto-kick when ball reaches any teammate
+      if (distToBall <= kickRange && this.teammateKickCooldown <= 0) {
+        const gdx = this.pRight - this.ball.x;
+        const gdy = this.pCY - this.ball.y;
+        const glen = Math.sqrt(gdx * gdx + gdy * gdy);
+        if (glen > 0) {
+          this.ball.kick(gdx / glen, gdy / glen, GAME_CONFIG.ball.kickSpeed * 0.8);
+          this.sound$.playKick();
+          this.teammateKickCooldown = 500;
+        }
+        return;
+      }
+
+      if (idx === 0) {
+        // Nearest teammate: support attacker — chase ball at 75% speed
+        this._moveAt(p, this.ball.x, this.ball.y, 0.75);
+      } else {
+        // Furthest teammate: hold a defensive position between ball and own goal
+        const defX = Phaser.Math.Clamp(
+          (this.ball.x + this.pLeft) / 2,
+          this.pLeft + 80, this.pCX - 40
+        );
+        const defY = Phaser.Math.Clamp(
+          (this.ball.y + this.pCY) / 2,
+          this.pTop + 40, this.pBottom - 40
+        );
+        this._moveAt(p, defX, defY, 0.65);
+      }
+    });
+  }
+
+  _moveAt(player, tx, ty, speedFactor) {
+    const dx = tx - player.x;
+    const dy = ty - player.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 6) { player.setVelocity(0, 0); return; }
+    const spd = GAME_CONFIG.player.speed * speedFactor;
+    player.faceDirection(dx / dist, dy / dist);
+    player.setVelocity(dx / dist * spd, dy / dist * spd);
   }
 
   _handleKick(time) {
