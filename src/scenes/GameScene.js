@@ -50,6 +50,12 @@ export default class GameScene extends Phaser.Scene {
 
     this.controlledPlayer = this.humanPlayers[0];
 
+    // Ball bounces off all players
+    const allPlayers = [...this.humanPlayers, ...this.aiPlayers];
+    allPlayers.forEach(p => p.setImmovable(true));
+    this.ball.setBounce(0.55);
+    this.physics.add.collider(this.ball, allPlayers);
+
     // AI attacks the human's left goal, defends its own right goal
     this.aiController = new AIController(
       this, this.aiPlayers, this.ball,
