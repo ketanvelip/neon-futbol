@@ -214,14 +214,9 @@ export default class GameScene extends Phaser.Scene {
     this.humanPlayers.forEach(p => {
       if (p === player) return;
       if (p.homeX < 250) {
-        // Goalkeeper: slide along goal line tracking ball Y
+        // Goalkeeper: move toward (homeX, clampedBallY) so X drift is corrected too
         const ty = Phaser.Math.Clamp(this.ball.y, this.goalTop, this.goalBottom);
-        const dy = ty - p.y;
-        if (Math.abs(dy) > 4) {
-          p.setVelocity(0, Math.sign(dy) * GAME_CONFIG.player.speed * 0.7);
-        } else {
-          p.setVelocity(0, 0);
-        }
+        p.moveToward(p.homeX, ty);
       } else {
         p.setVelocity(0, 0);
       }

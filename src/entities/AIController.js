@@ -52,12 +52,7 @@ export class AIController {
 
   _updateGK(gk) {
     const ty = Phaser.Math.Clamp(this.ball.y, this.goalY - PITCH.goalHeight / 2, this.goalY + PITCH.goalHeight / 2);
-    const dy = ty - gk.y;
-    if (Math.abs(dy) > 4) {
-      gk.setVelocity(0, Math.sign(dy) * GAME_CONFIG.ai.speed * 0.75);
-    } else {
-      gk.setVelocity(0, 0);
-    }
+    gk.moveToward(gk.homeX, ty);
   }
 
   _updateDefender(p) {
