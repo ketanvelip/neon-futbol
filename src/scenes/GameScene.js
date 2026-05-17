@@ -181,9 +181,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   _updateControlledPlayer() {
-    const outfield = this.humanPlayers.filter(p => p.homeX >= 250);
-    let nearest = outfield[0], nearDist = Infinity;
-    outfield.forEach(p => {
+    let nearest = this.humanPlayers[0], nearDist = Infinity;
+    this.humanPlayers.forEach(p => {
       const d = Phaser.Math.Distance.Between(p.x, p.y, this.ball.x, this.ball.y);
       if (d < nearDist) { nearDist = d; nearest = p; }
     });
@@ -210,16 +209,9 @@ export default class GameScene extends Phaser.Scene {
       player.setVelocity(0, 0);
     }
 
-    // Non-controlled players: GK tracks ball Y, others stand still
+    // Non-controlled players stand still
     this.humanPlayers.forEach(p => {
-      if (p === player) return;
-      if (p.homeX < 250) {
-        // Goalkeeper: move toward (homeX, clampedBallY) so X drift is corrected too
-        const ty = Phaser.Math.Clamp(this.ball.y, this.goalTop, this.goalBottom);
-        p.moveToward(p.homeX, ty);
-      } else {
-        p.setVelocity(0, 0);
-      }
+      if (p !== player) p.setVelocity(0, 0);
     });
 
     // Clamp all players to pitch
