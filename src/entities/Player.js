@@ -64,14 +64,22 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         this.abilityActive = false;
       });
     } else if (this.team.ability === 'phantom') {
+      this.isPhantom = true;
       this.setAlpha(0.25);
       this.scene.time.delayedCall(GAME_CONFIG.abilities.phantomDuration, () => {
         this.abilityActive = false;
+        this.isPhantom = false;
         this.setAlpha(1);
       });
     } else if (this.team.ability === 'blaze') {
       this.blazeReady = true;
-      // abilityActive cleared when the blaze shot is fired
+      // Fallback: clear blaze state after 10s if the player never kicks
+      this.scene.time.delayedCall(10000, () => {
+        if (this.blazeReady) {
+          this.blazeReady = false;
+          this.abilityActive = false;
+        }
+      });
     }
 
     return true;

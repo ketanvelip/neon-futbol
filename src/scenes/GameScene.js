@@ -38,9 +38,12 @@ export default class GameScene extends Phaser.Scene {
 
     this.ball = new Ball(this, this.pCX, this.pCY);
 
-    this.humanPlayers = GAME_CONFIG.playerPositions.human.map(pos =>
-      new Player(this, pos.x, pos.y, this.humanTeam, false)
-    );
+    this.humanPlayers = GAME_CONFIG.playerPositions.human.map(pos => {
+      const p = new Player(this, pos.x, pos.y, this.humanTeam, false);
+      p.homeX = pos.x;
+      p.homeY = pos.y;
+      return p;
+    });
     this.aiPlayers = GAME_CONFIG.playerPositions.ai.map(pos =>
       new Player(this, pos.x, pos.y, this.aiTeam, true)
     );
@@ -53,6 +56,7 @@ export default class GameScene extends Phaser.Scene {
       this.pLeft,   // attack goal x (human's goal)
       this.pRight   // defend goal x (ai's goal)
     );
+    this.aiController.humanPlayers = this.humanPlayers;
 
     this.sound$ = new SoundManager(this);
     this.hud = new HUD(this);
@@ -196,8 +200,19 @@ export default class GameScene extends Phaser.Scene {
       player.setVelocity(0, 0);
     }
 
-    // Stop other human players
-    this.humanPlayers.forEach(p => { if (p !== player) p.setVelocity(0, 0); });
+    // Non-controlled players drift back to their home positions
+    this.humanPlayers.forEach(p => {
+      if (p === player) return;
+      const dx = p.homeX - p.x;
+      const dy = p.homeY - p.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 6) {
+        const spd = GAME_CONFIG.player.speed * 0.55;
+        p.setVelocity(dx / dist * spd, dy / dist * spd);
+      } else {
+        p.setVelocity(0, 0);
+      }
+    });
 
     // Clamp all human players to pitch
     const r = GAME_CONFIG.player.radius;
